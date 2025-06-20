@@ -1,9 +1,3 @@
-Of course. A good `README.md` is essential for any project. It serves as both a user manual and a high-level technical documentation.
-
-Here is a comprehensive `README.md` file that describes the project's purpose, features, setup, configuration, and the roles of the main components in the code, as we've discussed.
-
------
-
 # AI-Powered E-Book Organizer
 
 A Python script that automatically organizes a collection of PDF e-books into a clean, hierarchical folder structure using Large Language Models (LLMs). It analyzes the content of each book to determine its category, generates a summary and keywords, and stores this information in a searchable metadata file.
