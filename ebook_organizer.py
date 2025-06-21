@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import argparse
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -18,8 +19,8 @@ load_dotenv()
 # --- 1. MAIN CONFIGURATION ---
 # Everything is controlled from here
 APP_CONFIG = {
-    "EBOOK_ROOT_FOLDER": "/path/to/your/ebooks",  # CHANGE THIS
-    "LLM_PROVIDER": "Ollama",  # Choose between "OpenAI", "Gemini", "Ollama"
+    "EBOOK_ROOT_FOLDER": "/path/to/your/ebooks",
+    "LLM_PROVIDER": "Ollama",
     "API_KEYS": {
         "OPENAI": os.getenv("OPENAI_API_KEY"),
         "GOOGLE": os.getenv("GOOGLE_API_KEY"),
@@ -32,16 +33,15 @@ APP_CONFIG = {
     },
     "OLLAMA_CONFIG": {
         "BASE_URL": "http://localhost:11434",
-        "MODEL": "llama3", # The model you have downloaded in Ollama
+        "MODEL": "llama3",
     },
     "PROCESSING_CONFIG": {
-        "CATEGORY_DEPTH": 3,  # How many levels of folders (2 or 3)
-        "FLEXIBLE_MODE": True,  # True: Allow LLM to create new categories
-        "IS_DRY_RUN": True,  # True: Simulate without moving files. Recommended for the first run!
-        "NEEDS_REVIEW": True, # True: Ask for manual approval for each book
+        "CATEGORY_DEPTH": 3,
+        "FLEXIBLE_MODE": True,
+        "IS_DRY_RUN": True,
+        "NEEDS_REVIEW": True,
         "MAX_TEXT_CHUNK_LENGTH": 20000,
     },
-    # Predefined structure that the LLM will use as a starting point
     "CATEGORY_STRUCTURE": {
         "Development": [
             "Web Development", "Mobile Development", "DevOps & CI/CD",
@@ -72,7 +72,7 @@ APP_CONFIG = {
 }
 
 # --- 2. LLM CLIENTS (Abstraction and Implementation) ---
-
+# ... (LLM client classes remain the same) ...
 class BaseLLMClient(ABC):
     """Abstract base class for all LLM clients."""
     @abstractmethod
@@ -87,7 +87,7 @@ class OpenAIClient(BaseLLMClient):
     def get_analysis(self, prompt: str) -> dict | None:
         try:
             response = self.client.chat.completions.create(
-                model=self.model_name, # A good and cost-effective choice
+                model=self.model_name,
                 messages=[
                     {"role": "system", "content": "You are an expert librarian categorizing technical books. You must reply with a valid JSON object."},
                     {"role": "user", "content": prompt}
@@ -107,10 +107,8 @@ class GeminiClient(BaseLLMClient):
 
     def get_analysis(self, prompt: str) -> dict | None:
         try:
-            # Gemini requires JSON instructions to be part of the prompt itself
             full_prompt = f"{prompt}\n\nImportant: Your response must be a valid JSON object, and nothing else."
             response = self.model.generate_content(full_prompt)
-            # Remove markdown formatting from Gemini's response
             cleaned_response = response.text.strip().replace("```json", "").replace("```", "").strip()
             return json.loads(cleaned_response)
         except Exception as e:
@@ -132,21 +130,20 @@ class OllamaClient(BaseLLMClient):
                 "options": {"temperature": 0.1}
             }
             response = requests.post(self.url, json=payload, timeout=120)
-            response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx or 5xx)
-            # Ollama returns a JSON string inside another JSON...
+            response.raise_for_status()
             return json.loads(response.json()['response'])
-        except requests.exceptions.RequestException as e: # Catch broader network errors
+        except requests.exceptions.RequestException as e:
             error_message = f"ERROR with Ollama API: {e}"
             if e.response is not None:
                 error_message += f"\nResponse Body: {e.response.text}"
             print(error_message)
             return None
-        except Exception as e: # Catch any other unexpected errors, like JSON parsing
+        except Exception as e:
             print(f"ERROR processing Ollama response: {e}")
             return None
 
 # --- 3. CORE FUNCTIONALITY (BookProcessor) ---
-
+# ... (BookProcessor class remains the same) ...
 class BookProcessor:
     def __init__(self, config, llm_client):
         self.config = config
@@ -154,19 +151,14 @@ class BookProcessor:
         self.log = []
 
     def _build_prompt(self, book_summary: str) -> str:
-        """Builds the complex prompt based on configuration."""
         cfg = self.config["PROCESSING_CONFIG"]
         depth = cfg["CATEGORY_DEPTH"]
         mode = "Flexible" if cfg["FLEXIBLE_MODE"] else "Strict"
-        
         category_text = json.dumps(self.config["CATEGORY_STRUCTURE"], indent=2)
-
         prompt = f"""
         You are an expert librarian analyzing a summary of a technical book.
-        
         **Task:**
         Analyze the summary below and return a JSON object with the following keys: "path", "summary", and "keywords".
-        
         **Rules for 'path':**
         1. 'path' must be a list of strings.
         2. The list depth must be exactly {depth} levels.
@@ -175,14 +167,11 @@ class BookProcessor:
         5. Mode: **{mode}**.
            - **Strict mode**: You MUST use the categories from the list.
            - **Flexible mode**: If no existing subcategory is a good match, you may propose a new one. Prefix new categories with "NEW: ". Example: "NEW: Quantum Computing".
-        
         **Rules for 'summary' and 'keywords':**
         1. 'summary': Create a concise summary of the book in 5-10 sentences, based on the text.
         2. 'keywords': Generate a list of 10 relevant, technical keywords.
-        
         **Available Categories:**
         {category_text}
-        
         **Book summary to analyze:**
         ---
         {book_summary}
@@ -191,42 +180,33 @@ class BookProcessor:
         return prompt
 
     def _extract_text_chunks(self, pdf_path: str) -> list[str]:
-        """Extracts text from PDF and splits it into chunks to avoid token limits."""
         chunks = []
-        doc = None  # Initialize doc to None
+        doc = None
         try:
             doc = fitz.open(pdf_path)
             full_text = ""
             for page in doc:
                 full_text += page.get_text() + "\n\n"
-            # Removed doc.close() from here
-
-            # Simple chunking based on length for this example
-            max_len = self.config["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"] # Approx. characters per chunk
+            max_len = self.config["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"]
             for i in range(0, len(full_text), max_len):
                 chunks.append(full_text[i:i + max_len])
-            
-            # Limit the number of chunks to save API costs in this example
             return chunks[:5] 
         except Exception as e:
             self.log.append(f"ERROR: Could not read text from {pdf_path}: {e}")
             return []
         finally:
-            if doc:  # Check if doc was successfully opened
+            if doc:
                 doc.close()
 
     def _get_map_reduce_summary(self, chunks: list[str]) -> str:
-        """Creates a summary of summaries (Map-Reduce)."""
         self.log.append("INFO: Using simplified 'Map-Reduce' method (joining text chunks).")
         return " ".join(chunks)
 
     def _handle_review(self, metadata: dict) -> dict | None:
-        """Handles manual review of the categorization."""
         print("\n--- MANUAL REVIEW ---")
         print(f"File: {metadata['original_filename']}")
         print(f"Suggested Path: {metadata['path']}")
         print(f"Summary: {metadata['summary']}")
-        
         while True:
             choice = input("Approve (a), edit (e), or skip (s)? ").lower()
             if choice == 'a':
@@ -239,11 +219,9 @@ class BookProcessor:
                 new_path_str = input(f"Enter new path, separated by '/': ")
                 edited_path = [p.strip() for p in new_path_str.split('/')]
                 expected_depth = self.config["PROCESSING_CONFIG"]["CATEGORY_DEPTH"]
-
                 if len(edited_path) != expected_depth:
                     print(f"ERROR: Path depth is incorrect. Expected {expected_depth} levels, but got {len(edited_path)}. Please try again.")
-                    continue  # Re-prompt the user
-
+                    continue
                 metadata['path'] = edited_path
                 metadata['review_status'] = 'manually_changed'
                 print(f"New path set to: {metadata['path']}")
@@ -252,11 +230,9 @@ class BookProcessor:
                 print("Invalid choice. Please try again.")
 
     def _organize_files(self, pdf_path: str, metadata: dict):
-        """Creates directories and moves files based on metadata."""
         cfg = self.config["PROCESSING_CONFIG"]
         root_folder = self.config["EBOOK_ROOT_FOLDER"]
         path_elements = metadata["path"]
-        
         final_path_elements = []
         for element in path_elements:
             if element.startswith("NEW: "):
@@ -265,12 +241,9 @@ class BookProcessor:
                 self.log.append(f"INFO: New category '{clean_element}' was dynamically created.")
             else:
                 final_path_elements.append(element)
-
         target_folder = os.path.join(root_folder, *final_path_elements)
-        
         original_pdf_filename = os.path.basename(pdf_path)
         original_json_filename = os.path.splitext(original_pdf_filename)[0] + ".json"
-
         current_pdf_name = original_pdf_filename
         current_json_name = original_json_filename
         counter = 1
@@ -278,23 +251,19 @@ class BookProcessor:
               os.path.exists(os.path.join(target_folder, current_json_name)):
             base_pdf, ext_pdf = os.path.splitext(original_pdf_filename)
             current_pdf_name = f"{base_pdf}_copy{counter}{ext_pdf}"
-
             base_json, ext_json = os.path.splitext(original_json_filename)
             current_json_name = f"{base_json}_copy{counter}{ext_json}"
             counter += 1
-
         if current_pdf_name != original_pdf_filename:
             self.log.append(f"INFO: PDF '{original_pdf_filename}' will be saved as '{current_pdf_name}' due to conflict.")
         if current_json_name != original_json_filename:
             self.log.append(f"INFO: JSON '{original_json_filename}' will be saved as '{current_json_name}' due to conflict.")
-
         log_action = "DRY RUN:" if cfg["IS_DRY_RUN"] else "ACTION:"
         if current_pdf_name != original_pdf_filename:
             log_message = f"{log_action} Target for '{original_pdf_filename}' (as '{current_pdf_name}') -> '{target_folder}'"
         else:
             log_message = f"{log_action} Target for '{current_pdf_name}' -> '{target_folder}'"
         self.log.append(log_message)
-
         if not cfg["IS_DRY_RUN"]:
             os.makedirs(target_folder, exist_ok=True)
             with open(os.path.join(target_folder, current_json_name), 'w', encoding='utf-8') as f:
@@ -302,73 +271,47 @@ class BookProcessor:
             shutil.move(pdf_path, os.path.join(target_folder, current_pdf_name))
 
     def process_all_books(self):
-        """Main method to find and process all ebooks."""
         root_folder = self.config["EBOOK_ROOT_FOLDER"]
-        
         for current_path, _, files in os.walk(root_folder):
-            # Avoid re-processing already categorized folders
             if any(cat in current_path for cat in self.config["CATEGORY_STRUCTURE"]):
                 if current_path != root_folder:
                     continue
-
             for filename in files:
                 if filename.lower().endswith(".pdf"):
                     pdf_path = os.path.join(current_path, filename)
                     json_path = os.path.splitext(pdf_path)[0] + ".json"
-                    
                     if os.path.exists(json_path):
                         continue
-                    
                     self.log.append(f"--- Processing new file: {filename} ---")
-                    
-                    # 1. Extract text
                     chunks = self._extract_text_chunks(pdf_path)
                     if not chunks:
                         continue
-                    
-                    # 2. Create summary (Map-Reduce)
                     summary_of_chunks = self._get_map_reduce_summary(chunks)
-                    
-                    # 3. Build prompt and get analysis from LLM
                     final_prompt = self._build_prompt(summary_of_chunks)
                     analysis = self.client.get_analysis(final_prompt)
-
-                    # --- START OF THE FIX ---
-                    # Add validation to ensure the LLM response is valid before proceeding.
                     if not analysis or not isinstance(analysis, dict):
                         self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
                         print(f"DEBUG: Invalid analysis received: {analysis}")
                         continue
-
-                    # Check for all required keys.
                     required_keys = ['path', 'summary', 'keywords']
                     if not all(key in analysis for key in required_keys):
                         self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
                         print(f"DEBUG: Malformed analysis received: {analysis}")
                         continue
-                    # --- END OF THE FIX ---
-                    
-                    # 4. Prepare metadata
                     metadata = {
                         "original_filename": filename,
                         "processed_date_utc": datetime.now(timezone.utc).isoformat(),
                         "llm_provider": self.config["LLM_PROVIDER"],
                         **analysis
                     }
-                    
-                    # 5. Manual review (if enabled)
                     final_metadata = metadata
                     if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
                         final_metadata = self._handle_review(metadata)
                     else:
                         final_metadata['review_status'] = 'auto_approved'
-
                     if final_metadata:
-                        # 6. Organize the files
                         self._organize_files(pdf_path, final_metadata)
-                    
-                    time.sleep(2) # Brief pause to avoid rate-limiting
-
+                    time.sleep(2)
     def print_log(self):
         print("\n" + "="*50)
         print("PROCESSING COMPLETE - LOG")
@@ -377,46 +320,65 @@ class BookProcessor:
             print(entry)
         print("="*50)
 
-
 # --- 4. MAIN ENTRY POINT ---
 
 if __name__ == "__main__":
-    # Check if the root folder exists
-    if not os.path.isdir(APP_CONFIG["EBOOK_ROOT_FOLDER"]):
-        print(f"ERROR: Directory '{APP_CONFIG['EBOOK_ROOT_FOLDER']}' not found.")
-        print("Please update EBOOK_ROOT_FOLDER in APP_CONFIG.")
-    else:
-        # Select and instantiate the correct LLM client
-        provider = APP_CONFIG["LLM_PROVIDER"]
+    # Store original APP_CONFIG values for comparison
+    original_ebook_folder = APP_CONFIG["EBOOK_ROOT_FOLDER"]
+    original_llm_provider = APP_CONFIG["LLM_PROVIDER"]
+    original_model = ""
+    if original_llm_provider == "OpenAI":
+        original_model = APP_CONFIG["OPENAI_CONFIG"]["MODEL"]
+    elif original_llm_provider == "Gemini":
+        original_model = APP_CONFIG["GEMINI_CONFIG"]["MODEL"]
+    elif original_llm_provider == "Ollama":
+        original_model = APP_CONFIG["OLLAMA_CONFIG"]["MODEL"]
+    original_category_depth = APP_CONFIG["PROCESSING_CONFIG"]["CATEGORY_DEPTH"]
+    original_flexible_mode = APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"]
+    original_is_dry_run = APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"]
+    original_needs_review = APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"]
 
-        if provider == "OpenAI":
-            if not APP_CONFIG["API_KEYS"]["OPENAI"]:
-                print(f"ERROR: OpenAI API key is missing. Please set OPENAI_API_KEY in your .env file or APP_CONFIG.")
-                exit()
-        elif provider == "Gemini":
-            if not APP_CONFIG["API_KEYS"]["GOOGLE"]:
-                print(f"ERROR: Google API key is missing. Please set GOOGLE_API_KEY in your .env file or APP_CONFIG.")
-                exit()
 
-        llm_client = None
+    parser = argparse.ArgumentParser(description="Organize ebook files based on metadata and command-line configurations.")
+    parser.add_argument("--ebook_folder", default=APP_CONFIG["EBOOK_ROOT_FOLDER"], help="Source directory containing ebook files. Overrides EBOOK_ROOT_FOLDER in APP_CONFIG.")
+    parser.add_argument("--llm_provider", choices=["OpenAI", "Gemini", "Ollama"], default=APP_CONFIG["LLM_PROVIDER"], help="LLM provider to use. Overrides LLM_PROVIDER in APP_CONFIG.")
+    parser.add_argument("--model", help="LLM model to use. Overrides model in APP_CONFIG for the selected provider.")
+    parser.add_argument("--category_depth", type=int, default=APP_CONFIG["PROCESSING_CONFIG"]["CATEGORY_DEPTH"], help="Number of category levels for subfolders. Overrides CATEGORY_DEPTH in APP_CONFIG.")
+    parser.add_argument("--flexible_mode", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"], help="Allow LLM to create new categories (e.g. --flexible_mode / --no-flexible_mode). Overrides FLEXIBLE_MODE in APP_CONFIG.")
+    parser.add_argument("--is_dry_run", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"], help="Simulate without moving files (e.g. --is_dry_run / --no-is_dry_run). Overrides IS_DRY_RUN in APP_CONFIG.")
+    parser.add_argument("--needs_review", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"], help="Ask for manual approval for each book (e.g. --needs_review / --no-needs_review). Overrides NEEDS_REVIEW in APP_CONFIG.")
 
-        if provider == "OpenAI":
-            llm_client = OpenAIClient(APP_CONFIG["API_KEYS"]["OPENAI"], APP_CONFIG["OPENAI_CONFIG"]["MODEL"])
-        elif provider == "Gemini":
-            llm_client = GeminiClient(APP_CONFIG["API_KEYS"]["GOOGLE"], APP_CONFIG["GEMINI_CONFIG"]["MODEL"])
-        elif provider == "Ollama":
-            cfg = APP_CONFIG["OLLAMA_CONFIG"]
-            llm_client = OllamaClient(cfg["BASE_URL"], cfg["MODEL"])
-        
-        if not llm_client:
-            print(f"ERROR: Unknown or unconfigured LLM Provider '{provider}'.")
-        else:
-            print("="*50)
-            print("E-BOOK ORGANIZER")
-            print(f"Mode: {'DRY RUN' if APP_CONFIG['PROCESSING_CONFIG']['IS_DRY_RUN'] else 'LIVE'}")
-            print(f"LLM Provider: {provider}")
-            print("="*50)
-            
-            processor = BookProcessor(APP_CONFIG, llm_client)
-            processor.process_all_books()
-            processor.print_log()
+    # TEST 8: No Arguments (Defaults)
+    print("--- TEST 8: No Arguments (Defaults) ---")
+    test_args_list = [] # No arguments
+    args = parser.parse_args(test_args_list)
+
+    APP_CONFIG["EBOOK_ROOT_FOLDER"] = args.ebook_folder
+    APP_CONFIG["LLM_PROVIDER"] = args.llm_provider
+    APP_CONFIG["PROCESSING_CONFIG"]["CATEGORY_DEPTH"] = args.category_depth
+    APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"] = args.flexible_mode
+    APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"] = args.is_dry_run
+    APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"] = args.needs_review
+
+    current_model_in_config = ""
+    if args.llm_provider == "OpenAI":
+        # If args.model is None, it means no override was given, so use the default from initial APP_CONFIG
+        APP_CONFIG["OPENAI_CONFIG"]["MODEL"] = args.model if args.model is not None else original_model
+        current_model_in_config = APP_CONFIG["OPENAI_CONFIG"]["MODEL"]
+    elif args.llm_provider == "Gemini":
+        APP_CONFIG["GEMINI_CONFIG"]["MODEL"] = args.model if args.model is not None else original_model
+        current_model_in_config = APP_CONFIG["GEMINI_CONFIG"]["MODEL"]
+    elif args.llm_provider == "Ollama":
+        APP_CONFIG["OLLAMA_CONFIG"]["MODEL"] = args.model if args.model is not None else original_model
+        current_model_in_config = APP_CONFIG["OLLAMA_CONFIG"]["MODEL"]
+
+    print(f"APP_CONFIG['LLM_PROVIDER'] (Expected: {original_llm_provider}): {APP_CONFIG['LLM_PROVIDER']}")
+    print(f"Model for {APP_CONFIG['LLM_PROVIDER']} (Expected: {original_model}): {current_model_in_config}")
+    print(f"APP_CONFIG['EBOOK_ROOT_FOLDER'] (Expected: {original_ebook_folder}): {APP_CONFIG['EBOOK_ROOT_FOLDER']}")
+    print(f"APP_CONFIG['PROCESSING_CONFIG']['CATEGORY_DEPTH'] (Expected: {original_category_depth}): {APP_CONFIG['PROCESSING_CONFIG']['CATEGORY_DEPTH']}")
+    print(f"APP_CONFIG['PROCESSING_CONFIG']['FLEXIBLE_MODE'] (Expected: {original_flexible_mode}): {APP_CONFIG['PROCESSING_CONFIG']['FLEXIBLE_MODE']}")
+    print(f"APP_CONFIG['PROCESSING_CONFIG']['IS_DRY_RUN'] (Expected: {original_is_dry_run}): {APP_CONFIG['PROCESSING_CONFIG']['IS_DRY_RUN']}")
+    print(f"APP_CONFIG['PROCESSING_CONFIG']['NEEDS_REVIEW'] (Expected: {original_needs_review}): {APP_CONFIG['PROCESSING_CONFIG']['NEEDS_REVIEW']}")
+
+    print("--- TEST 8 COMPLETE ---")
+    exit()
