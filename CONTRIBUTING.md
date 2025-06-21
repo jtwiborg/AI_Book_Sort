@@ -10,8 +10,8 @@ First off, thank you for considering contributing to this project! Your help is 
 
 2.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/ai-powered-ebook-organizer.git # Replace with the actual URL
-    cd ai-powered-ebook-organizer
+    git clone https://github.com/jtwiborg/AI_Book_Sort.git
+    cd AI_Book_Sort
     ```
 
 3.  **Install Dependencies**:
@@ -49,7 +49,7 @@ First off, thank you for considering contributing to this project! Your help is 
 
 ## How to submit bug reports and feature requests
 
-*   **Use GitHub Issues**: Submit all bug reports and feature requests through [GitHub Issues](https://github.com/your-username/ai-powered-ebook-organizer/issues). (Replace with the actual URL)
+*   **Use GitHub Issues**: Submit all bug reports and feature requests through [GitHub Issues](https://github.com/jtwiborg/AI_Book_Sort/issues).
 *   **Check Existing Issues**: Before creating a new issue, please check if a similar one already exists.
 *   **Bug Reports**:
     *   Use a clear and descriptive title.
@@ -67,11 +67,11 @@ First off, thank you for considering contributing to this project! Your help is 
 
 ## Process for submitting pull requests
 
-1.  **Fork the Repository**: Click the "Fork" button at the top right of the [repository page](https://github.com/your-username/ai-powered-ebook-organizer). (Replace with the actual URL) This creates your own copy of the project.
+1.  **Fork the Repository**: Click the "Fork" button at the top right of the [repository page](https://github.com/jtwiborg/AI_Book_Sort/). This creates your own copy of the project.
 2.  **Clone Your Fork**: Clone your forked repository to your local machine.
     ```bash
-    git clone https://github.com/YOUR_USERNAME/ai-powered-ebook-organizer.git
-    cd ai-powered-ebook-organizer
+    git clone https://github.com/jtwiborg/AI_Book_Sort.git
+    cd AI_Book_Sort
     ```
 3.  **Create a New Branch**: Create a new branch for your changes. Choose a descriptive branch name (e.g., `fix-pdf-parsing-bug`, `add-korean-language-support`).
     ```bash
