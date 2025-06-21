@@ -18,7 +18,7 @@ load_dotenv()
 # --- 1. MAIN CONFIGURATION ---
 # Everything is controlled from here
 APP_CONFIG = {
-    "EBOOK_ROOT_FOLDER": "./Ebooks2",  # CHANGE THIS
+    "EBOOK_ROOT_FOLDER": "/path/to/your/ebooks",  # CHANGE THIS
     "LLM_PROVIDER": "Ollama",  # Choose between "OpenAI", "Gemini", "Ollama"
     "API_KEYS": {
         "OPENAI": os.getenv("OPENAI_API_KEY"),
@@ -26,7 +26,7 @@ APP_CONFIG = {
     },
     "OLLAMA_CONFIG": {
         "BASE_URL": "http://localhost:11434",
-        "MODEL": "llama3.2:latest", # The model you have downloaded in Ollama
+        "MODEL": "llama3", # The model you have downloaded in Ollama
     },
     "PROCESSING_CONFIG": {
         "CATEGORY_DEPTH": 3,  # How many levels of folders (2 or 3)
@@ -37,28 +37,28 @@ APP_CONFIG = {
     # Predefined structure that the LLM will use as a starting point
     "CATEGORY_STRUCTURE": {
         "Development": [
-            "Web Development", "Mobile Development", "DevOps & CI/CD", 
+            "Web Development", "Mobile Development", "DevOps & CI/CD",
             "AI & Machine Learning", "Game Development", "Database Development", "API Design"
         ],
         "Programming Languages": [
-            "Python", "JavaScript & TypeScript", "Java & JVM", "C# & .NET", 
+            "Python", "JavaScript & TypeScript", "Java & JVM", "C# & .NET",
             "C & C++", "Go", "Rust", "SQL", "Shell Scripting"
         ],
         "Infrastructure & SysAdmin": [
-            "Cloud Services", "Networking", "Linux & Unix", "Windows Server", 
+            "Cloud Services", "Networking", "Linux & Unix", "Windows Server",
             "Containers & Orchestration", "Virtualization"
         ],
         "Security": [
-            "Network Security", "Application Security (AppSec)", 
-            "Penetration Testing & Ethical Hacking", "Cryptography", "Cloud Security", 
+            "Network Security", "Application Security (AppSec)",
+            "Penetration Testing & Ethical Hacking", "Cryptography", "Cloud Security",
             "Security Management & Compliance"
         ],
         "Data Disciplines": [
-            "Data Analysis", "Data Engineering", 
+            "Data Analysis", "Data Engineering",
             "Big Data Technologies", "Data Visualization"
         ],
         "Architecture & Methodology": [
-            "Software Architecture", "Project Management & Agile", 
+            "Software Architecture", "Project Management & Agile",
             "Clean Code & Best Practices", "Theoretical Computer Science"
         ],
     },
@@ -199,9 +199,6 @@ class BookProcessor:
 
     def _get_map_reduce_summary(self, chunks: list[str]) -> str:
         """Creates a summary of summaries (Map-Reduce)."""
-        # For this example, we just join the chunks.
-        # A full-fledged app would send each chunk for summarization first.
-        # This is to save time and API calls in this sketch.
         self.log.append("INFO: Using simplified 'Map-Reduce' method (joining text chunks).")
         return " ".join(chunks)
 
@@ -258,75 +255,73 @@ class BookProcessor:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
             shutil.move(pdf_path, os.path.join(target_folder, pdf_filename))
 
-    # REPLACE the existing process_all_books method with this one
-
-def process_all_books(self):
-    """Main method to find and process all ebooks."""
-    root_folder = self.config["EBOOK_ROOT_FOLDER"]
-    
-    for current_path, _, files in os.walk(root_folder):
-        # Avoid re-processing already categorized folders
-        if any(cat in current_path for cat in self.config["CATEGORY_STRUCTURE"]):
-            if current_path != root_folder:
-                continue
-
-        for filename in files:
-            if filename.lower().endswith(".pdf"):
-                pdf_path = os.path.join(current_path, filename)
-                json_path = os.path.splitext(pdf_path)[0] + ".json"
-                
-                if os.path.exists(json_path):
-                    continue
-                
-                self.log.append(f"--- Processing new file: {filename} ---")
-                
-                # 1. Extract text
-                chunks = self._extract_text_chunks(pdf_path)
-                if not chunks:
-                    continue
-                
-                # 2. Create summary (Map-Reduce)
-                summary_of_chunks = self._get_map_reduce_summary(chunks)
-                
-                # 3. Build prompt and get analysis from LLM
-                final_prompt = self._build_prompt(summary_of_chunks)
-                analysis = self.client.get_analysis(final_prompt)
-                
-                # --- START OF THE FIX ---
-                # Add validation to ensure the LLM response is valid before proceeding.
-                if not analysis or not isinstance(analysis, dict):
-                    self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
-                    print(f"DEBUG: Invalid analysis received: {analysis}")
+    def process_all_books(self):
+        """Main method to find and process all ebooks."""
+        root_folder = self.config["EBOOK_ROOT_FOLDER"]
+        
+        for current_path, _, files in os.walk(root_folder):
+            # Avoid re-processing already categorized folders
+            if any(cat in current_path for cat in self.config["CATEGORY_STRUCTURE"]):
+                if current_path != root_folder:
                     continue
 
-                # Check for all required keys.
-                required_keys = ['path', 'summary', 'keywords']
-                if not all(key in analysis for key in required_keys):
-                    self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
-                    print(f"DEBUG: Malformed analysis received: {analysis}")
-                    continue
-                # --- END OF THE FIX ---
+            for filename in files:
+                if filename.lower().endswith(".pdf"):
+                    pdf_path = os.path.join(current_path, filename)
+                    json_path = os.path.splitext(pdf_path)[0] + ".json"
+                    
+                    if os.path.exists(json_path):
+                        continue
+                    
+                    self.log.append(f"--- Processing new file: {filename} ---")
+                    
+                    # 1. Extract text
+                    chunks = self._extract_text_chunks(pdf_path)
+                    if not chunks:
+                        continue
+                    
+                    # 2. Create summary (Map-Reduce)
+                    summary_of_chunks = self._get_map_reduce_summary(chunks)
+                    
+                    # 3. Build prompt and get analysis from LLM
+                    final_prompt = self._build_prompt(summary_of_chunks)
+                    analysis = self.client.get_analysis(final_prompt)
 
-                # 4. Prepare metadata
-                metadata = {
-                    "original_filename": filename,
-                    "processed_date_utc": datetime.now(timezone.utc).isoformat(),
-                    "llm_provider": self.config["LLM_PROVIDER"],
-                    **analysis
-                }
-                
-                # 5. Manual review (if enabled)
-                final_metadata = metadata
-                if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
-                    final_metadata = self._handle_review(metadata)
-                else:
-                    final_metadata['review_status'] = 'auto_approved'
+                    # --- START OF THE FIX ---
+                    # Add validation to ensure the LLM response is valid before proceeding.
+                    if not analysis or not isinstance(analysis, dict):
+                        self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
+                        print(f"DEBUG: Invalid analysis received: {analysis}")
+                        continue
 
-                if final_metadata:
-                    # 6. Organize the files
-                    self._organize_files(pdf_path, final_metadata)
-                
-                time.sleep(2)
+                    # Check for all required keys.
+                    required_keys = ['path', 'summary', 'keywords']
+                    if not all(key in analysis for key in required_keys):
+                        self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
+                        print(f"DEBUG: Malformed analysis received: {analysis}")
+                        continue
+                    # --- END OF THE FIX ---
+                    
+                    # 4. Prepare metadata
+                    metadata = {
+                        "original_filename": filename,
+                        "processed_date_utc": datetime.now(timezone.utc).isoformat(),
+                        "llm_provider": self.config["LLM_PROVIDER"],
+                        **analysis
+                    }
+                    
+                    # 5. Manual review (if enabled)
+                    final_metadata = metadata
+                    if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
+                        final_metadata = self._handle_review(metadata)
+                    else:
+                        final_metadata['review_status'] = 'auto_approved'
+
+                    if final_metadata:
+                        # 6. Organize the files
+                        self._organize_files(pdf_path, final_metadata)
+                    
+                    time.sleep(2) # Brief pause to avoid rate-limiting
 
     def print_log(self):
         print("\n" + "="*50)
