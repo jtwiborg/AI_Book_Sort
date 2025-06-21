@@ -1,10 +1,10 @@
 # AI-Powered E-Book Organizer
 
-A Python script that automatically organizes a collection of PDF e-books into a clean, hierarchical folder structure using Large Language Models (LLMs). It analyzes the content of each book to determine its category, generates a summary and keywords, and stores this information in a searchable metadata file.
+A Python script that automatically organizes a collection of e-books (PDF and EPUB) into a clean, hierarchical folder structure using Large Language Models (LLMs). It analyzes the content of each book to determine its category, generates a summary and keywords, and stores this information in a searchable metadata file.
 
 ## The Idea
 
-Many of us have large collections of e-books, often in a single, messy folder. Finding a specific book or books on a certain topic can be difficult. This program solves that problem by acting as an intelligent librarian. It reads through each PDF, understands its core topics, and then automatically files it away in a logical subfolder, creating a structured and easily navigable library.
+Many of us have large collections of e-books, often in a single, messy folder. Finding a specific book or books on a certain topic can be difficult. This program solves that problem by acting as an intelligent librarian. It reads through each book (PDF or EPUB), understands its core topics, and then automatically files it away in a logical subfolder, creating a structured and easily navigable library.
 
 ## Key Features
 
@@ -21,18 +21,18 @@ Many of us have large collections of e-books, often in a single, messy folder. F
   - **Safe Operation Modes**:
       - **Dry Run**: Simulate the entire process without moving any files to see what the script *would* do.
       - **Manual Review**: A command-line prompt to approve, edit, or skip the LLM's suggested categorization for each book.
-  - **Recursive Processing**: Scans all subdirectories of your main e-book folder for new PDFs to process.
+  - **Recursive Processing**: Scans all subdirectories of your main e-book folder for new books (PDF or EPUB) to process.
 
 ## How It Works
 
-The script follows a robust "Map-Reduce" inspired workflow for each PDF file:
+The script follows a robust "Map-Reduce" inspired workflow for each book file:
 
-1.  **Scan**: The script recursively scans the root e-book folder for any `.pdf` files that do not have a corresponding `.json` metadata file, marking them as "unprocessed".
-2.  **Extract & Chunk**: It opens a PDF and extracts its text content using the `PyMuPDF` library. The text is divided into smaller "chunks" to be manageable for the LLM's context window.
+1.  **Scan**: The script recursively scans the root e-book folder for any `.pdf` or `.epub` files that do not have a corresponding `.json` metadata file, marking them as "unprocessed".
+2.  **Extract & Chunk**: It opens a book file (PDF or EPUB) and extracts its text content. For PDFs, it uses the `PyMuPDF` library. For EPUBs, it uses `EbookLib` and `BeautifulSoup`. The text is divided into smaller "chunks" to be manageable for the LLM's context window.
 3.  **Summarize (Simplified Map-Reduce)**: The text chunks are combined to form a comprehensive overview of the book's content. (A full implementation would summarize each chunk individually before combining them).
 4.  **Analyze (LLM Call)**: This combined summary is sent to the selected LLM with a detailed prompt. The prompt instructs the LLM to act as an expert librarian and return a structured JSON object containing the category path, a detailed summary, and keywords.
 5.  **Review (Optional)**: If `NEEDS_REVIEW` is enabled, the script presents the LLM's findings to the user, who can approve, edit, or skip the file.
-6.  **Organize**: The script creates the required hierarchical folder structure (e.g., `./Security/Application Security (AppSec)/`). It then moves the original `.pdf` file and the newly created `.json` metadata file into the target directory.
+6.  **Organize**: The script creates the required hierarchical folder structure (e.g., `./Security/Application Security (AppSec)/`). It then moves the original book file and the newly created `.json` metadata file into the target directory.
 
 ## Setup and Installation
 
@@ -49,7 +49,7 @@ The script follows a robust "Map-Reduce" inspired workflow for each PDF file:
 
       - Open your terminal or command prompt in the same directory as the script and run:
         ```bash
-        pip install openai google-generativeai pymupdf requests python-dotenv
+        pip install openai google-generativeai pymupdf requests python-dotenv EbookLib beautifulsoup4
         ```
 
 4.  **Set Up API Keys**:
@@ -131,6 +131,12 @@ You can customize the script's behavior for a specific run using the following c
     -   `--needs_review`: Prompts for approval.
     -   `--no-needs_review`: Auto-approves all.
     -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"]`.
+-   `--no-pdf`:
+    -   Skips processing of PDF files.
+    -   Useful if you only want to process EPUB files in a mixed collection.
+-   `--no-epub`:
+    -   Skips processing of EPUB files.
+    -   Useful if you only want to process PDF files.
 
 **Examples:**
 
@@ -173,7 +179,7 @@ These classes handle all communication with the different AI services.
 
 ## Example Workflow
 
-1.  **Initial State**: You have a file at `/path/to/your/ebooks/unsorted/grokking_algorithms.pdf`.
+1.  **Initial State**: You have a file at `/path/to/your/ebooks/unsorted/grokking_algorithms.pdf` (or `grokking_algorithms.epub`).
 2.  **Configuration**: You set `IS_DRY_RUN` to `False` and `CATEGORY_DEPTH` to `3`.
 3.  **Execution**: You run `python ebook_organizer.py`.
 4.  **Process**:
@@ -181,12 +187,12 @@ These classes handle all communication with the different AI services.
       - It extracts the text and sends it to the LLM.
       - The LLM determines the book is about fundamental algorithms and data structures. It returns a path like `["Architecture & Methodology", "Theoretical Computer Science", "Algorithms & Data Structures"]`.
       - It also returns a summary and keywords.
-5.  **Final State**: The script creates the following structure and moves the files:
+5.  **Final State**: The script creates the following structure and moves the files (preserving the original file extension):
     ```
     /path/to/your/ebooks/
     └── Architecture & Methodology/
         └── Theoretical Computer Science/
             └── Algorithms & Data Structures/
-                ├── grokking_algorithms.pdf
+                ├── grokking_algorithms.pdf  (or .epub)
                 └── grokking_algorithms.json
     ```
