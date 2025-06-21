@@ -63,7 +63,7 @@ The script follows a robust "Map-Reduce" inspired workflow for each PDF file:
 
 ## Configuration
 
-All settings are controlled from the `APP_CONFIG` dictionary at the top of the `ebook_organizer.py` script.
+The `APP_CONFIG` dictionary at the top of the `ebook_organizer.py` script defines the *default* settings for the application. Many of these can be overridden by command-line arguments (see 'Command-Line Arguments' section below).
 
 ```python
 APP_CONFIG = {
@@ -86,13 +86,66 @@ APP_CONFIG = {
 
 ## Usage
 
-Once you have configured `APP_CONFIG`, run the script from your terminal:
+Once you have configured `APP_CONFIG` (or if you plan to use command-line overrides), run the script from your terminal:
 
 ```bash
-python ebook_organizer.py
+python ebook_organizer.py [ARGUMENTS]
 ```
 
-The script will begin scanning for files and processing them according to your configuration.
+The script will begin scanning for files and processing them according to your configuration and any provided command-line arguments.
+
+### Command-Line Arguments
+
+You can customize the script's behavior for a specific run using the following command-line arguments. These will override the corresponding default values set in the `APP_CONFIG` dictionary.
+
+-   `-h, --help`:
+    -   Shows a help message listing all available arguments and their descriptions, then exits.
+-   `--ebook_folder PATH`:
+    -   Specifies the root directory containing your ebook files.
+    -   Overrides `EBOOK_ROOT_FOLDER` in `APP_CONFIG`.
+    -   Example: `--ebook_folder /mnt/my_ebook_collection`
+-   `--llm_provider {OpenAI,Gemini,Ollama}`:
+    -   Chooses the LLM provider to use for analysis.
+    -   Default: Value from `APP_CONFIG["LLM_PROVIDER"]`.
+    -   Example: `--llm_provider OpenAI`
+-   `--model MODEL_NAME`:
+    -   Specifies the exact model name for the chosen LLM provider.
+    -   Overrides the model specified in `APP_CONFIG` (e.g., `APP_CONFIG["OPENAI_CONFIG"]["MODEL"]`).
+    -   Example: `--model gpt-3.5-turbo` (if using OpenAI)
+-   `--category_depth {2,3}`:
+    -   Sets the number of subfolder levels for categorization (2 or 3).
+    -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["CATEGORY_DEPTH"]`.
+    -   Example: `--category_depth 2`
+-   `--flexible_mode` / `--no-flexible_mode`:
+    -   Enables or disables flexible category creation by the LLM.
+    -   `--flexible_mode`: Allows new categories.
+    -   `--no-flexible_mode`: Restricts to predefined categories.
+    -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"]`.
+-   `--is_dry_run` / `--no-is_dry_run`:
+    -   Enables or disables dry run mode.
+    -   `--is_dry_run`: Simulates operations without moving files.
+    -   `--no-is_dry_run`: Performs actual file operations.
+    -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"]`.
+-   `--needs_review` / `--no-needs_review`:
+    -   Enables or disables manual review for each book's categorization.
+    -   `--needs_review`: Prompts for approval.
+    -   `--no-needs_review`: Auto-approves all.
+    -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"]`.
+
+**Examples:**
+
+-   Run a dry run simulating the use of the OpenAI provider:
+    ```bash
+    python ebook_organizer.py --llm_provider OpenAI --is_dry_run
+    ```
+-   Set a custom ebook folder and turn off flexible category creation:
+    ```bash
+    python ebook_organizer.py --ebook_folder /my_digital_library --no-flexible_mode
+    ```
+-   Get help on all available command-line arguments:
+    ```bash
+    python ebook_organizer.py --help
+    ```
 
 ## Code Documentation
 
