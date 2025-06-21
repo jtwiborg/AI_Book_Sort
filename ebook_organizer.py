@@ -24,6 +24,12 @@ APP_CONFIG = {
         "OPENAI": os.getenv("OPENAI_API_KEY"),
         "GOOGLE": os.getenv("GOOGLE_API_KEY"),
     },
+    "OPENAI_CONFIG": {
+        "MODEL": "gpt-4o-mini"
+    },
+    "GEMINI_CONFIG": {
+        "MODEL": "gemini-1.5-flash"
+    },
     "OLLAMA_CONFIG": {
         "BASE_URL": "http://localhost:11434",
         "MODEL": "llama3", # The model you have downloaded in Ollama
@@ -33,6 +39,7 @@ APP_CONFIG = {
         "FLEXIBLE_MODE": True,  # True: Allow LLM to create new categories
         "IS_DRY_RUN": True,  # True: Simulate without moving files. Recommended for the first run!
         "NEEDS_REVIEW": True, # True: Ask for manual approval for each book
+        "MAX_TEXT_CHUNK_LENGTH": 20000,
     },
     # Predefined structure that the LLM will use as a starting point
     "CATEGORY_STRUCTURE": {
@@ -73,13 +80,14 @@ class BaseLLMClient(ABC):
         raise NotImplementedError
 
 class OpenAIClient(BaseLLMClient):
-    def __init__(self, api_key):
+    def __init__(self, api_key, model_name):
         self.client = openai.OpenAI(api_key=api_key)
+        self.model_name = model_name
 
     def get_analysis(self, prompt: str) -> dict | None:
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini", # A good and cost-effective choice
+                model=self.model_name, # A good and cost-effective choice
                 messages=[
                     {"role": "system", "content": "You are an expert librarian categorizing technical books. You must reply with a valid JSON object."},
                     {"role": "user", "content": prompt}
@@ -93,9 +101,9 @@ class OpenAIClient(BaseLLMClient):
             return None
 
 class GeminiClient(BaseLLMClient):
-    def __init__(self, api_key):
+    def __init__(self, api_key, model_name):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel(model_name)
 
     def get_analysis(self, prompt: str) -> dict | None:
         try:
@@ -124,11 +132,17 @@ class OllamaClient(BaseLLMClient):
                 "options": {"temperature": 0.1}
             }
             response = requests.post(self.url, json=payload, timeout=120)
-            response.raise_for_status()
+            response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx or 5xx)
             # Ollama returns a JSON string inside another JSON...
             return json.loads(response.json()['response'])
-        except Exception as e:
-            print(f"ERROR with Ollama API: {e}")
+        except requests.exceptions.RequestException as e: # Catch broader network errors
+            error_message = f"ERROR with Ollama API: {e}"
+            if e.response is not None:
+                error_message += f"\nResponse Body: {e.response.text}"
+            print(error_message)
+            return None
+        except Exception as e: # Catch any other unexpected errors, like JSON parsing
+            print(f"ERROR processing Ollama response: {e}")
             return None
 
 # --- 3. CORE FUNCTIONALITY (BookProcessor) ---
@@ -179,15 +193,16 @@ class BookProcessor:
     def _extract_text_chunks(self, pdf_path: str) -> list[str]:
         """Extracts text from PDF and splits it into chunks to avoid token limits."""
         chunks = []
+        doc = None  # Initialize doc to None
         try:
             doc = fitz.open(pdf_path)
             full_text = ""
             for page in doc:
                 full_text += page.get_text() + "\n\n"
-            doc.close()
+            # Removed doc.close() from here
 
             # Simple chunking based on length for this example
-            max_len = 20000 # Approx. characters per chunk
+            max_len = self.config["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"] # Approx. characters per chunk
             for i in range(0, len(full_text), max_len):
                 chunks.append(full_text[i:i + max_len])
             
@@ -196,6 +211,9 @@ class BookProcessor:
         except Exception as e:
             self.log.append(f"ERROR: Could not read text from {pdf_path}: {e}")
             return []
+        finally:
+            if doc:  # Check if doc was successfully opened
+                doc.close()
 
     def _get_map_reduce_summary(self, chunks: list[str]) -> str:
         """Creates a summary of summaries (Map-Reduce)."""
@@ -219,7 +237,14 @@ class BookProcessor:
                 return None
             elif choice == 'e':
                 new_path_str = input(f"Enter new path, separated by '/': ")
-                metadata['path'] = [p.strip() for p in new_path_str.split('/')]
+                edited_path = [p.strip() for p in new_path_str.split('/')]
+                expected_depth = self.config["PROCESSING_CONFIG"]["CATEGORY_DEPTH"]
+
+                if len(edited_path) != expected_depth:
+                    print(f"ERROR: Path depth is incorrect. Expected {expected_depth} levels, but got {len(edited_path)}. Please try again.")
+                    continue  # Re-prompt the user
+
+                metadata['path'] = edited_path
                 metadata['review_status'] = 'manually_changed'
                 print(f"New path set to: {metadata['path']}")
                 return metadata
@@ -243,17 +268,38 @@ class BookProcessor:
 
         target_folder = os.path.join(root_folder, *final_path_elements)
         
-        pdf_filename = os.path.basename(pdf_path)
-        json_filename = os.path.splitext(pdf_filename)[0] + ".json"
-        
+        original_pdf_filename = os.path.basename(pdf_path)
+        original_json_filename = os.path.splitext(original_pdf_filename)[0] + ".json"
+
+        current_pdf_name = original_pdf_filename
+        current_json_name = original_json_filename
+        counter = 1
+        while os.path.exists(os.path.join(target_folder, current_pdf_name)) or \
+              os.path.exists(os.path.join(target_folder, current_json_name)):
+            base_pdf, ext_pdf = os.path.splitext(original_pdf_filename)
+            current_pdf_name = f"{base_pdf}_copy{counter}{ext_pdf}"
+
+            base_json, ext_json = os.path.splitext(original_json_filename)
+            current_json_name = f"{base_json}_copy{counter}{ext_json}"
+            counter += 1
+
+        if current_pdf_name != original_pdf_filename:
+            self.log.append(f"INFO: PDF '{original_pdf_filename}' will be saved as '{current_pdf_name}' due to conflict.")
+        if current_json_name != original_json_filename:
+            self.log.append(f"INFO: JSON '{original_json_filename}' will be saved as '{current_json_name}' due to conflict.")
+
         log_action = "DRY RUN:" if cfg["IS_DRY_RUN"] else "ACTION:"
-        self.log.append(f"{log_action} Target for '{pdf_filename}' -> '{target_folder}'")
+        if current_pdf_name != original_pdf_filename:
+            log_message = f"{log_action} Target for '{original_pdf_filename}' (as '{current_pdf_name}') -> '{target_folder}'"
+        else:
+            log_message = f"{log_action} Target for '{current_pdf_name}' -> '{target_folder}'"
+        self.log.append(log_message)
 
         if not cfg["IS_DRY_RUN"]:
             os.makedirs(target_folder, exist_ok=True)
-            with open(os.path.join(target_folder, json_filename), 'w', encoding='utf-8') as f:
+            with open(os.path.join(target_folder, current_json_name), 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
-            shutil.move(pdf_path, os.path.join(target_folder, pdf_filename))
+            shutil.move(pdf_path, os.path.join(target_folder, current_pdf_name))
 
     def process_all_books(self):
         """Main method to find and process all ebooks."""
@@ -342,12 +388,22 @@ if __name__ == "__main__":
     else:
         # Select and instantiate the correct LLM client
         provider = APP_CONFIG["LLM_PROVIDER"]
+
+        if provider == "OpenAI":
+            if not APP_CONFIG["API_KEYS"]["OPENAI"]:
+                print(f"ERROR: OpenAI API key is missing. Please set OPENAI_API_KEY in your .env file or APP_CONFIG.")
+                exit()
+        elif provider == "Gemini":
+            if not APP_CONFIG["API_KEYS"]["GOOGLE"]:
+                print(f"ERROR: Google API key is missing. Please set GOOGLE_API_KEY in your .env file or APP_CONFIG.")
+                exit()
+
         llm_client = None
 
         if provider == "OpenAI":
-            llm_client = OpenAIClient(APP_CONFIG["API_KEYS"]["OPENAI"])
+            llm_client = OpenAIClient(APP_CONFIG["API_KEYS"]["OPENAI"], APP_CONFIG["OPENAI_CONFIG"]["MODEL"])
         elif provider == "Gemini":
-            llm_client = GeminiClient(APP_CONFIG["API_KEYS"]["GOOGLE"])
+            llm_client = GeminiClient(APP_CONFIG["API_KEYS"]["GOOGLE"], APP_CONFIG["GEMINI_CONFIG"]["MODEL"])
         elif provider == "Ollama":
             cfg = APP_CONFIG["OLLAMA_CONFIG"]
             llm_client = OllamaClient(cfg["BASE_URL"], cfg["MODEL"])
