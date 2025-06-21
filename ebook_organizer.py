@@ -18,7 +18,7 @@ load_dotenv()
 # --- 1. MAIN CONFIGURATION ---
 # Everything is controlled from here
 APP_CONFIG = {
-    "EBOOK_ROOT_FOLDER": "/path/to/your/ebooks",  # CHANGE THIS
+    "EBOOK_ROOT_FOLDER": "./Ebooks2",  # CHANGE THIS
     "LLM_PROVIDER": "Ollama",  # Choose between "OpenAI", "Gemini", "Ollama"
     "API_KEYS": {
         "OPENAI": os.getenv("OPENAI_API_KEY"),
@@ -26,7 +26,7 @@ APP_CONFIG = {
     },
     "OLLAMA_CONFIG": {
         "BASE_URL": "http://localhost:11434",
-        "MODEL": "llama3", # The model you have downloaded in Ollama
+        "MODEL": "llama3.2:latest", # The model you have downloaded in Ollama
     },
     "PROCESSING_CONFIG": {
         "CATEGORY_DEPTH": 3,  # How many levels of folders (2 or 3)
