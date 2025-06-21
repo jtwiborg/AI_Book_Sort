@@ -258,63 +258,75 @@ class BookProcessor:
                 json.dump(metadata, f, ensure_ascii=False, indent=4)
             shutil.move(pdf_path, os.path.join(target_folder, pdf_filename))
 
-    def process_all_books(self):
-        """Main method to find and process all ebooks."""
-        root_folder = self.config["EBOOK_ROOT_FOLDER"]
-        
-        for current_path, _, files in os.walk(root_folder):
-            # Avoid re-processing already categorized folders
-            if any(cat in current_path for cat in self.config["CATEGORY_STRUCTURE"]):
-                if current_path != root_folder:
+    # REPLACE the existing process_all_books method with this one
+
+def process_all_books(self):
+    """Main method to find and process all ebooks."""
+    root_folder = self.config["EBOOK_ROOT_FOLDER"]
+    
+    for current_path, _, files in os.walk(root_folder):
+        # Avoid re-processing already categorized folders
+        if any(cat in current_path for cat in self.config["CATEGORY_STRUCTURE"]):
+            if current_path != root_folder:
+                continue
+
+        for filename in files:
+            if filename.lower().endswith(".pdf"):
+                pdf_path = os.path.join(current_path, filename)
+                json_path = os.path.splitext(pdf_path)[0] + ".json"
+                
+                if os.path.exists(json_path):
+                    continue
+                
+                self.log.append(f"--- Processing new file: {filename} ---")
+                
+                # 1. Extract text
+                chunks = self._extract_text_chunks(pdf_path)
+                if not chunks:
+                    continue
+                
+                # 2. Create summary (Map-Reduce)
+                summary_of_chunks = self._get_map_reduce_summary(chunks)
+                
+                # 3. Build prompt and get analysis from LLM
+                final_prompt = self._build_prompt(summary_of_chunks)
+                analysis = self.client.get_analysis(final_prompt)
+                
+                # --- START OF THE FIX ---
+                # Add validation to ensure the LLM response is valid before proceeding.
+                if not analysis or not isinstance(analysis, dict):
+                    self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
+                    print(f"DEBUG: Invalid analysis received: {analysis}")
                     continue
 
-            for filename in files:
-                if filename.lower().endswith(".pdf"):
-                    pdf_path = os.path.join(current_path, filename)
-                    json_path = os.path.splitext(pdf_path)[0] + ".json"
-                    
-                    # Check if the book has already been processed
-                    if os.path.exists(json_path):
-                        continue
-                    
-                    self.log.append(f"--- Processing new file: {filename} ---")
-                    
-                    # 1. Extract text
-                    chunks = self._extract_text_chunks(pdf_path)
-                    if not chunks:
-                        continue
-                    
-                    # 2. Create summary (Map-Reduce)
-                    summary_of_chunks = self._get_map_reduce_summary(chunks)
-                    
-                    # 3. Build prompt and get analysis from LLM
-                    final_prompt = self._build_prompt(summary_of_chunks)
-                    analysis = self.client.get_analysis(final_prompt)
-                    
-                    if not analysis:
-                        self.log.append(f"ERROR: Failed to get analysis for {filename}.")
-                        continue
+                # Check for all required keys.
+                required_keys = ['path', 'summary', 'keywords']
+                if not all(key in analysis for key in required_keys):
+                    self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
+                    print(f"DEBUG: Malformed analysis received: {analysis}")
+                    continue
+                # --- END OF THE FIX ---
 
-                    # 4. Prepare metadata
-                    metadata = {
-                        "original_filename": filename,
-                        "processed_date_utc": datetime.now(timezone.utc).isoformat(),
-                        "llm_provider": self.config["LLM_PROVIDER"],
-                        **analysis
-                    }
-                    
-                    # 5. Manual review (if enabled)
-                    final_metadata = metadata
-                    if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
-                        final_metadata = self._handle_review(metadata)
-                    else:
-                        final_metadata['review_status'] = 'auto_approved'
+                # 4. Prepare metadata
+                metadata = {
+                    "original_filename": filename,
+                    "processed_date_utc": datetime.now(timezone.utc).isoformat(),
+                    "llm_provider": self.config["LLM_PROVIDER"],
+                    **analysis
+                }
+                
+                # 5. Manual review (if enabled)
+                final_metadata = metadata
+                if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
+                    final_metadata = self._handle_review(metadata)
+                else:
+                    final_metadata['review_status'] = 'auto_approved'
 
-                    if final_metadata:
-                        # 6. Organize the files
-                        self._organize_files(pdf_path, final_metadata)
-                    
-                    time.sleep(2) # Brief pause to avoid rate-limiting
+                if final_metadata:
+                    # 6. Organize the files
+                    self._organize_files(pdf_path, final_metadata)
+                
+                time.sleep(2)
 
     def print_log(self):
         print("\n" + "="*50)
