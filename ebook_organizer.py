@@ -372,6 +372,7 @@ if __name__ == "__main__":
     original_flexible_mode = APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"]
     original_is_dry_run = APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"]
     original_needs_review = APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"]
+    original_max_text_chunk_length = APP_CONFIG["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"]
 
 
     parser = argparse.ArgumentParser(description="Organize ebook files based on metadata and command-line configurations.")
@@ -382,6 +383,7 @@ if __name__ == "__main__":
     parser.add_argument("--flexible_mode", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"], help="Allow LLM to create new categories (e.g. --flexible_mode / --no-flexible_mode). Overrides FLEXIBLE_MODE in APP_CONFIG.")
     parser.add_argument("--is_dry_run", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"], help="Simulate without moving files (e.g. --is_dry_run / --no-is_dry_run). Overrides IS_DRY_RUN in APP_CONFIG.")
     parser.add_argument("--needs_review", action=argparse.BooleanOptionalAction, default=APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"], help="Ask for manual approval for each book (e.g. --needs_review / --no-needs_review). Overrides NEEDS_REVIEW in APP_CONFIG.")
+    parser.add_argument("--max_text_chunk_length", type=int, default=APP_CONFIG["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"], help="Maximum character length for text chunks sent to the LLM. Overrides MAX_TEXT_CHUNK_LENGTH in APP_CONFIG.")
     parser.add_argument("--no-pdf", action="store_true", help="Do not process PDF files.")
     parser.add_argument("--no-epub", action="store_true", help="Do not process EPUB files.")
 
@@ -393,6 +395,7 @@ if __name__ == "__main__":
     APP_CONFIG["PROCESSING_CONFIG"]["FLEXIBLE_MODE"] = args.flexible_mode
     APP_CONFIG["PROCESSING_CONFIG"]["IS_DRY_RUN"] = args.is_dry_run
     APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"] = args.needs_review
+    APP_CONFIG["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"] = args.max_text_chunk_length
 
     # Determine LLM client based on provider
     llm_client = None
