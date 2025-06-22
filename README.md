@@ -131,6 +131,11 @@ You can customize the script's behavior for a specific run using the following c
     -   `--needs_review`: Prompts for approval.
     -   `--no-needs_review`: Auto-approves all.
     -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["NEEDS_REVIEW"]`.
+-   `--max_text_chunk_length VALUE`:
+    -   Sets the maximum character length for text chunks sent to the LLM.
+    -   This can be useful if you encounter context length issues with your chosen LLM or want to experiment with different chunk sizes for performance or analysis quality.
+    -   Default: Value from `APP_CONFIG["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"]` (currently 20000).
+    -   Example: `--max_text_chunk_length 15000`
 -   `--no-pdf`:
     -   Skips processing of PDF files.
     -   Useful if you only want to process EPUB files in a mixed collection.
