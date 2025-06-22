@@ -319,34 +319,34 @@ class BookProcessor:
 
                 self.log.append(f"--- Processing new file: {filename} ---")
                 chunks = self._extract_text_chunks(file_path)
-                    if not chunks:
-                        continue
-                    summary_of_chunks = self._get_map_reduce_summary(chunks)
-                    final_prompt = self._build_prompt(summary_of_chunks)
-                    analysis = self.client.get_analysis(final_prompt)
-                    if not analysis or not isinstance(analysis, dict):
-                        self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
-                        print(f"DEBUG: Invalid analysis received: {analysis}")
-                        continue
-                    required_keys = ['path', 'summary', 'keywords']
-                    if not all(key in analysis for key in required_keys):
-                        self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
-                        print(f"DEBUG: Malformed analysis received: {analysis}")
-                        continue
-                    metadata = {
-                        "original_filename": filename,
-                        "processed_date_utc": datetime.now(timezone.utc).isoformat(),
-                        "llm_provider": self.config["LLM_PROVIDER"],
-                        **analysis
-                    }
-                    final_metadata = metadata
-                    if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
-                        final_metadata = self._handle_review(metadata)
-                    else:
-                        final_metadata['review_status'] = 'auto_approved'
-                    if final_metadata:
-                        self._organize_files(file_path, final_metadata)
-                    time.sleep(2)
+                if not chunks:
+                    continue
+                summary_of_chunks = self._get_map_reduce_summary(chunks)
+                final_prompt = self._build_prompt(summary_of_chunks)
+                analysis = self.client.get_analysis(final_prompt)
+                if not analysis or not isinstance(analysis, dict):
+                    self.log.append(f"ERROR: Received invalid or empty analysis for {filename}. Skipping.")
+                    print(f"DEBUG: Invalid analysis received: {analysis}")
+                    continue
+                required_keys = ['path', 'summary', 'keywords']
+                if not all(key in analysis for key in required_keys):
+                    self.log.append(f"ERROR: LLM response for {filename} was missing one or more required keys ('path', 'summary', 'keywords'). Skipping.")
+                    print(f"DEBUG: Malformed analysis received: {analysis}")
+                    continue
+                metadata = {
+                    "original_filename": filename,
+                    "processed_date_utc": datetime.now(timezone.utc).isoformat(),
+                    "llm_provider": self.config["LLM_PROVIDER"],
+                    **analysis
+                }
+                final_metadata = metadata
+                if self.config["PROCESSING_CONFIG"]["NEEDS_REVIEW"]:
+                    final_metadata = self._handle_review(metadata)
+                else:
+                    final_metadata['review_status'] = 'auto_approved'
+                if final_metadata:
+                    self._organize_files(file_path, final_metadata)
+                time.sleep(2)
     def print_log(self):
         print("\n" + "="*50)
         print("PROCESSING COMPLETE - LOG")
