@@ -148,9 +148,10 @@ class OllamaClient(BaseLLMClient):
 # --- 3. CORE FUNCTIONALITY (BookProcessor) ---
 # ... (BookProcessor class remains the same) ...
 class BookProcessor:
-    def __init__(self, config, llm_client):
+    def __init__(self, config, llm_client, args):
         self.config = config
         self.client = llm_client
+        self.args = args
         self.log = []
 
     def _build_prompt(self, book_summary: str) -> str:
@@ -158,6 +159,18 @@ class BookProcessor:
         depth = cfg["CATEGORY_DEPTH"]
         mode = "Flexible" if cfg["FLEXIBLE_MODE"] else "Strict"
         category_text = json.dumps(self.config["CATEGORY_STRUCTURE"], indent=2)
+
+        if self.args.load_prompt and os.path.exists(self.args.load_prompt):
+            try:
+                with open(self.args.load_prompt, 'r', encoding='utf-8') as f:
+                    prompt_template = f.read()
+                self.log.append(f"INFO: Loaded custom prompt from {self.args.load_prompt}")
+                # Ensure the loaded prompt can be formatted with the required variables
+                return prompt_template.format(depth=depth, mode=mode, category_text=category_text, book_summary=book_summary)
+            except Exception as e:
+                self.log.append(f"ERROR: Could not read or format custom prompt file {self.args.load_prompt}: {e}. Falling back to default prompt.")
+
+        # Default prompt if custom prompt is not loaded
         prompt = f"""
         You are an expert librarian analyzing a summary of a technical book.
         **Task:**
@@ -386,9 +399,11 @@ if __name__ == "__main__":
     parser.add_argument("--max_text_chunk_length", type=int, default=APP_CONFIG["PROCESSING_CONFIG"]["MAX_TEXT_CHUNK_LENGTH"], help="Maximum character length for text chunks sent to the LLM. Overrides MAX_TEXT_CHUNK_LENGTH in APP_CONFIG.")
     parser.add_argument("--no-pdf", action="store_true", help="Do not process PDF files.")
     parser.add_argument("--no-epub", action="store_true", help="Do not process EPUB files.")
+    parser.add_argument("--load_prompt", default=None, help="Path to a custom prompt file. Overrides the built-in prompt.")
 
     args = parser.parse_args() # Parse actual command-line arguments
 
+    # Normal execution path
     APP_CONFIG["EBOOK_ROOT_FOLDER"] = args.ebook_folder
     APP_CONFIG["LLM_PROVIDER"] = args.llm_provider
     APP_CONFIG["PROCESSING_CONFIG"]["CATEGORY_DEPTH"] = args.category_depth
@@ -416,6 +431,6 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Unsupported LLM_PROVIDER: {APP_CONFIG['LLM_PROVIDER']}")
 
-    processor = BookProcessor(APP_CONFIG, llm_client)
+    processor = BookProcessor(APP_CONFIG, llm_client, args)
     processor.process_all_books(no_pdf=args.no_pdf, no_epub=args.no_epub)
     processor.print_log()
