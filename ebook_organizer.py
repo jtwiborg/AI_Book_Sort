@@ -169,7 +169,7 @@ class BookProcessor:
                 return prompt_template.format(depth=depth, mode=mode, category_text=category_text, book_summary=book_summary)
             except Exception as e:
                 self.log.append(f"ERROR: Could not read or format custom prompt file {self.args.load_prompt}: {e}. Falling back to default prompt.")
-
+        
         # Default prompt if custom prompt is not loaded
         prompt = f"""
         You are an expert librarian analyzing a summary of a technical book.
@@ -434,3 +434,5 @@ if __name__ == "__main__":
     processor = BookProcessor(APP_CONFIG, llm_client, args)
     processor.process_all_books(no_pdf=args.no_pdf, no_epub=args.no_epub)
     processor.print_log()
+
+

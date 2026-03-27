@@ -1,6 +1,6 @@
 # AI-Powered E-Book Organizer
 
-A Python script that automatically organizes a collection of e-books (PDF and EPUB) into a clean, hierarchical folder structure using Large Language Models (LLMs). It analyzes the content of each book to determine its category, generates a summary and keywords, and stores this information in a searchable metadata file.
+A Python tool for AI-assisted organization of e-books (PDF and EPUB) into a structured knowledge library. It analyzes the content of each book, assigns it to a hierarchical category path, generates summary and keyword metadata, and can optionally use a custom external prompt file for prompt-tuning without changing the code.
 
 ## The Idea
 
@@ -18,6 +18,7 @@ Many of us have large collections of e-books, often in a single, messy folder. F
       - The category path.
       - Processing information (date, LLM used).
   - **Multi-LLM Support**: Easily switch between different AI providers.
+  - **Custom Prompt Support**: Load a custom prompt template from file to tune categorization behavior without editing the script.
   - **Safe Operation Modes**:
       - **Dry Run**: Simulate the entire process without moving any files to see what the script *would* do.
       - **Manual Review**: A command-line prompt to approve, edit, or skip the LLM's suggested categorization for each book.
@@ -64,6 +65,8 @@ The script follows a robust "Map-Reduce" inspired workflow for each book file:
 ## Configuration
 
 The `APP_CONFIG` dictionary at the top of the `ebook_organizer.py` script defines the *default* settings for the application. Many of these can be overridden by command-line arguments (see 'Command-Line Arguments' section below).
+
+Important repository note: local book collections, generated data, and private prompt/data files should not be committed to git. The repository should primarily contain code and safe example/configuration material.
 
 ```python
 APP_CONFIG = {
@@ -142,6 +145,10 @@ You can customize the script's behavior for a specific run using the following c
 -   `--no-epub`:
     -   Skips processing of EPUB files.
     -   Useful if you only want to process PDF files.
+-   `--load_prompt PATH`:
+    -   Loads a custom prompt template from a file.
+    -   Overrides the built-in categorization prompt while still formatting in the current values for depth, mode, category structure, and book summary.
+    -   Useful for prompt-tuning and experimentation without editing the source code.
 
 **Examples:**
 
